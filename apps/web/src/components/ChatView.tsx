@@ -4,7 +4,6 @@ import {
   EDITORS,
   type EditorId,
   type KeybindingCommand,
-  type CodexReasoningEffort,
   type MessageId,
   type ProjectId,
   type ProjectEntry,
@@ -21,6 +20,7 @@ import {
   OrchestrationThreadActivity,
   RuntimeMode,
   ProviderInteractionMode,
+  type ReasoningEffort,
 } from "@t3tools/contracts";
 import {
   getDefaultModel,
@@ -835,21 +835,6 @@ export default function ChatView({ threadId }: ChatViewProps) {
     customModelsForSelectedProvider,
     selectedProvider,
   ]);
-  const reasoningOptions = getReasoningEffortOptions(selectedProvider);
-  const supportsReasoningEffort = reasoningOptions.length > 0;
-  const selectedEffort = composerDraft.effort ?? getDefaultReasoningEffort(selectedProvider);
-  const selectedCodexFastModeEnabled =
-    selectedProvider === "codex" ? composerDraft.codexFastMode : false;
-  const selectedModelOptionsForDispatch = useMemo(() => {
-    if (selectedProvider !== "codex") {
-      return undefined;
-    }
-    const codexOptions = {
-      ...(supportsReasoningEffort && selectedEffort ? { reasoningEffort: selectedEffort } : {}),
-      ...(selectedCodexFastModeEnabled ? { fastMode: true } : {}),
-    };
-    return Object.keys(codexOptions).length > 0 ? { codex: codexOptions } : undefined;
-  }, [selectedCodexFastModeEnabled, selectedEffort, selectedProvider, supportsReasoningEffort]);
   const selectedModelForPicker = selectedModel;
   const selectedModelForPickerWithCustomFallback = useMemo(() => {
     const currentOptions = modelOptionsByProvider[selectedProvider];
@@ -857,6 +842,39 @@ export default function ChatView({ threadId }: ChatViewProps) {
       ? selectedModelForPicker
       : (normalizeModelSlug(selectedModelForPicker, selectedProvider) ?? selectedModelForPicker);
   }, [modelOptionsByProvider, selectedModelForPicker, selectedProvider]);
+  const opencodeReasoningOptions = useMemo(
+    () =>
+      getOpenCodeReasoningOptions(
+        serverConfigQuery.data?.providers ?? EMPTY_PROVIDER_STATUSES,
+        selectedModelForPickerWithCustomFallback,
+      ),
+    [selectedModelForPickerWithCustomFallback, serverConfigQuery.data?.providers],
+  );
+  const reasoningOptions =
+    selectedProvider === "opencode"
+      ? opencodeReasoningOptions
+      : getReasoningEffortOptions(selectedProvider);
+  const supportsReasoningEffort = reasoningOptions.length > 0;
+  const selectedEffort = composerDraft.effort ?? getDefaultReasoningEffort(selectedProvider);
+  const selectedCodexFastModeEnabled =
+    selectedProvider === "codex" ? composerDraft.codexFastMode : false;
+  const selectedModelOptionsForDispatch = useMemo(() => {
+    if (selectedProvider === "codex") {
+      const reasoningEffort =
+        selectedEffort && isCodexReasoningEffort(selectedEffort) ? selectedEffort : undefined;
+      const codexOptions = {
+        ...(supportsReasoningEffort && reasoningEffort ? { reasoningEffort } : {}),
+        ...(selectedCodexFastModeEnabled ? { fastMode: true } : {}),
+      };
+      return Object.keys(codexOptions).length > 0 ? { codex: codexOptions } : undefined;
+    }
+    if (selectedProvider === "opencode") {
+      const reasoningEffort =
+        selectedEffort && isOpenCodeReasoningEffort(selectedEffort) ? selectedEffort : undefined;
+      return reasoningEffort ? { opencode: { reasoningEffort } } : undefined;
+    }
+    return undefined;
+  }, [selectedCodexFastModeEnabled, selectedEffort, selectedProvider, supportsReasoningEffort]);
   const searchableModelOptions = useMemo(
     () =>
       AVAILABLE_PROVIDER_OPTIONS.filter(
@@ -3108,7 +3126,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
     ],
   );
   const onEffortSelect = useCallback(
-    (effort: CodexReasoningEffort) => {
+    (effort: ReasoningEffort | null) => {
       setComposerDraftEffort(threadId, effort);
       scheduleComposerFocus();
     },
@@ -3665,15 +3683,20 @@ export default function ChatView({ threadId }: ChatViewProps) {
                     onProviderModelChange={onProviderModelSelect}
                   />
 
-                  {selectedProvider === "codex" && selectedEffort != null ? (
+                  {supportsReasoningEffort ? (
                     <>
                       <Separator orientation="vertical" className="mx-0.5 hidden h-4 sm:block" />
-                      <CodexTraitsPicker
+                      <ReasoningTraitsPicker
                         effort={selectedEffort}
-                        fastModeEnabled={selectedCodexFastModeEnabled}
+                        defaultEffort={getDefaultReasoningEffort(selectedProvider)}
                         options={reasoningOptions}
                         onEffortChange={onEffortSelect}
-                        onFastModeChange={onCodexFastModeChange}
+                        {...(selectedProvider === "codex"
+                          ? {
+                              fastModeEnabled: selectedCodexFastModeEnabled,
+                              onFastModeChange: onCodexFastModeChange,
+                            }
+                          : {})}
                       />
                     </>
                   ) : null}
@@ -5331,7 +5354,6 @@ function getCustomModelOptionsByProvider(
   },
   providerStatuses: ReadonlyArray<ServerProviderStatus>,
 ): Record<ProviderKind, ReadonlyArray<{ slug: string; name: string }>> {
-  console.log({ providerStatuses });
   const opencodeModels =
     providerStatuses.find((status) => status.provider === "opencode")?.models ?? [];
   return {
@@ -5353,6 +5375,46 @@ function getCustomModelsForProvider(
   provider: ProviderKind,
 ) {
   return provider === "opencode" ? settings.customOpencodeModels : settings.customCodexModels;
+}
+
+const OPEN_CODE_REASONING_OPTIONS = new Set<ReasoningEffort>([
+  "none",
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "max",
+]);
+const CODEX_REASONING_OPTIONS = new Set<ReasoningEffort>(["low", "medium", "high", "xhigh"]);
+
+function isCodexReasoningEffort(value: ReasoningEffort): value is Extract<ReasoningEffort, "low" | "medium" | "high" | "xhigh"> {
+  return CODEX_REASONING_OPTIONS.has(value);
+}
+
+function isOpenCodeReasoningEffort(
+  value: ReasoningEffort,
+): value is Extract<ReasoningEffort, "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max"> {
+  return OPEN_CODE_REASONING_OPTIONS.has(value);
+}
+
+function getOpenCodeReasoningOptions(
+  providerStatuses: ReadonlyArray<ServerProviderStatus>,
+  selectedModel: string | null | undefined,
+): ReadonlyArray<ReasoningEffort> {
+  if (!selectedModel) {
+    return [];
+  }
+
+  const model = providerStatuses
+    .find((status) => status.provider === "opencode")
+    ?.models?.find((entry) => entry.slug === selectedModel);
+
+  if (!model?.variants || model.variants.length === 0) {
+    return [];
+  }
+
+  return [...OPEN_CODE_REASONING_OPTIONS].filter((option) => model.variants?.includes(option));
 }
 
 const PROVIDER_ICON_BY_PROVIDER: Record<ProviderPickerKind, Icon> = {
@@ -5529,23 +5591,27 @@ const ProviderModelPicker = memo(function ProviderModelPicker(props: {
   );
 });
 
-const CodexTraitsPicker = memo(function CodexTraitsPicker(props: {
-  effort: CodexReasoningEffort;
-  fastModeEnabled: boolean;
-  options: ReadonlyArray<CodexReasoningEffort>;
-  onEffortChange: (effort: CodexReasoningEffort) => void;
-  onFastModeChange: (enabled: boolean) => void;
+const ReasoningTraitsPicker = memo(function ReasoningTraitsPicker(props: {
+  effort: ReasoningEffort | null;
+  defaultEffort: ReasoningEffort | null;
+  fastModeEnabled?: boolean;
+  options: ReadonlyArray<ReasoningEffort>;
+  onEffortChange: (effort: ReasoningEffort | null) => void;
+  onFastModeChange?: (enabled: boolean) => void;
 }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const defaultReasoningEffort = getDefaultReasoningEffort("codex");
-  const reasoningLabelByOption: Record<CodexReasoningEffort, string> = {
+  const reasoningLabelByOption: Record<ReasoningEffort, string> = {
+    none: "None",
+    minimal: "Minimal",
     low: "Low",
     medium: "Medium",
     high: "High",
     xhigh: "Extra High",
+    max: "Max",
   };
+  const activeEffort = props.effort ?? props.defaultEffort;
   const triggerLabel = [
-    reasoningLabelByOption[props.effort],
+    activeEffort ? reasoningLabelByOption[activeEffort] : "Default",
     ...(props.fastModeEnabled ? ["Fast"] : []),
   ]
     .filter(Boolean)
@@ -5574,35 +5640,46 @@ const CodexTraitsPicker = memo(function CodexTraitsPicker(props: {
         <MenuGroup>
           <div className="px-2 py-1.5 font-medium text-muted-foreground text-xs">Reasoning</div>
           <MenuRadioGroup
-            value={props.effort}
+            value={props.effort ?? "default"}
             onValueChange={(value) => {
               if (!value) return;
+              if (value === "default") {
+                props.onEffortChange(null);
+                return;
+              }
               const nextEffort = props.options.find((option) => option === value);
               if (!nextEffort) return;
               props.onEffortChange(nextEffort);
             }}
           >
+            <MenuRadioItem value="default">
+              Default
+              {props.defaultEffort ? ` (${reasoningLabelByOption[props.defaultEffort]})` : ""}
+            </MenuRadioItem>
             {props.options.map((effort) => (
               <MenuRadioItem key={effort} value={effort}>
                 {reasoningLabelByOption[effort]}
-                {effort === defaultReasoningEffort ? " (default)" : ""}
               </MenuRadioItem>
             ))}
           </MenuRadioGroup>
         </MenuGroup>
-        <MenuDivider />
-        <MenuGroup>
-          <div className="px-2 py-1.5 font-medium text-muted-foreground text-xs">Fast Mode</div>
-          <MenuRadioGroup
-            value={props.fastModeEnabled ? "on" : "off"}
-            onValueChange={(value) => {
-              props.onFastModeChange(value === "on");
-            }}
-          >
-            <MenuRadioItem value="off">off</MenuRadioItem>
-            <MenuRadioItem value="on">on</MenuRadioItem>
-          </MenuRadioGroup>
-        </MenuGroup>
+        {props.onFastModeChange ? (
+          <>
+            <MenuDivider />
+            <MenuGroup>
+              <div className="px-2 py-1.5 font-medium text-muted-foreground text-xs">Fast Mode</div>
+              <MenuRadioGroup
+                value={props.fastModeEnabled ? "on" : "off"}
+                onValueChange={(value) => {
+                  props.onFastModeChange?.(value === "on");
+                }}
+              >
+                <MenuRadioItem value="off">off</MenuRadioItem>
+                <MenuRadioItem value="on">on</MenuRadioItem>
+              </MenuRadioGroup>
+            </MenuGroup>
+          </>
+        ) : null}
       </MenuPopup>
     </Menu>
   );

@@ -6,6 +6,7 @@ import {
   type CodexReasoningEffort,
   type ModelSlug,
   type ProviderKind,
+  type ReasoningEffort,
 } from "@t3tools/contracts";
 
 type CatalogProvider = keyof typeof MODEL_OPTIONS_BY_PROVIDER;
@@ -67,15 +68,15 @@ export function resolveModelSlugForProvider(
 
 export function getReasoningEffortOptions(
   provider: ProviderKind = "codex",
-): ReadonlyArray<CodexReasoningEffort> {
+): ReadonlyArray<ReasoningEffort> {
   return provider === "codex" ? CODEX_REASONING_EFFORT_OPTIONS : [];
 }
 
 export function getDefaultReasoningEffort(provider: "codex"): CodexReasoningEffort;
-export function getDefaultReasoningEffort(provider: ProviderKind): CodexReasoningEffort | null;
+export function getDefaultReasoningEffort(provider: ProviderKind): ReasoningEffort | null;
 export function getDefaultReasoningEffort(
   provider: ProviderKind = "codex",
-): CodexReasoningEffort | null {
+): ReasoningEffort | null {
   return provider === "codex" ? "high" : null;
 }
 

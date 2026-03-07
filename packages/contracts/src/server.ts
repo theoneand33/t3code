@@ -36,6 +36,7 @@ export type ServerProviderAuthStatus = typeof ServerProviderAuthStatus.Type;
 export const ServerProviderModel = Schema.Struct({
   slug: TrimmedNonEmptyString,
   name: TrimmedNonEmptyString,
+  variants: Schema.optional(Schema.Array(TrimmedNonEmptyString)),
 });
 export type ServerProviderModel = typeof ServerProviderModel.Type;
 

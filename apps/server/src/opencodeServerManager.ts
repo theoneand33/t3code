@@ -30,8 +30,11 @@ import type {
   EventSessionError,
   EventSessionStatus,
   EventTodoUpdated,
+  ProviderListResponse,
+  Model as OpenCodeModel,
   OpencodeClient as OpenCodeSdkClient,
   OpencodeClientConfig,
+  ConfigProvidersResponse,
   QuestionInfo,
   Todo as OpenCodeTodo,
   ToolPart as OpenCodeToolPart,
@@ -55,6 +58,13 @@ type OpencodeClientOptions = OpencodeClientConfig & {
 type OpenCodeModelDiscoveryOptions = OpenCodeProviderOptions & {
   directory?: string;
 };
+type OpenCodeDiscoveredModel = {
+  slug: string;
+  name: string;
+  variants?: ReadonlyArray<string>;
+};
+type OpenCodeListedProvider = ProviderListResponse["all"][number];
+type OpenCodeConfiguredProvider = ConfigProvidersResponse["providers"][number];
 
 interface OpenCodeManagerEvents {
   event: [ProviderRuntimeEvent];
@@ -120,10 +130,6 @@ function asString(value: unknown): string | undefined {
   return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
-function asArray(value: unknown): ReadonlyArray<unknown> | undefined {
-  return Array.isArray(value) ? value : undefined;
-}
-
 function eventId(prefix: string): EventId {
   return EventId.makeUnsafe(`${prefix}:${randomUUID()}`);
 }
@@ -163,6 +169,7 @@ function parseOpencodeModel(model: string | undefined):
   | {
       providerId: string;
       modelId: string;
+      variant?: string;
     }
   | undefined {
   const value = asString(model);
@@ -173,58 +180,76 @@ function parseOpencodeModel(model: string | undefined):
   if (index < 1 || index >= value.length - 1) {
     return undefined;
   }
+  const providerId = value.slice(0, index);
+  const modelAndVariant = value.slice(index + 1);
+  const variantIndex = modelAndVariant.lastIndexOf("#");
+  const modelId = variantIndex >= 1 ? modelAndVariant.slice(0, variantIndex) : modelAndVariant;
+  const variant =
+    variantIndex >= 1 && variantIndex < modelAndVariant.length - 1
+      ? modelAndVariant.slice(variantIndex + 1)
+      : undefined;
   return {
-    providerId: value.slice(0, index),
-    modelId: value.slice(index + 1),
+    providerId,
+    modelId,
+    ...(variant ? { variant } : {}),
   };
 }
 
-function parseProviderModels(payload: unknown): ReadonlyArray<{ slug: string; name: string }> {
-  const providers = asArray(payload) ?? [];
-  return providers.flatMap((entry) => {
-    const provider = asRecord(entry);
-    const providerId = asString(provider?.id);
-    const providerName = asString(provider?.name) ?? providerId;
-    const models = asRecord(provider?.models);
-    if (!providerId || !providerName || !models) {
-      return [];
-    }
-    return Object.values(models).flatMap((value) => {
-      const model = asRecord(value);
-      const modelId = asString(model?.id);
-      const modelName = asString(model?.name) ?? modelId;
-      if (!modelId || !modelName) {
-        return [];
-      }
-      return [
-        {
-          slug: `${providerId}/${modelId}`,
-          name: `${providerName} / ${modelName}`,
-        },
-      ];
-    });
+const PREFERRED_VARIANT_ORDER = ["none", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
+
+function compareOpenCodeVariantNames(left: string, right: string): number {
+  const leftIndex = PREFERRED_VARIANT_ORDER.indexOf(left as (typeof PREFERRED_VARIANT_ORDER)[number]);
+  const rightIndex = PREFERRED_VARIANT_ORDER.indexOf(right as (typeof PREFERRED_VARIANT_ORDER)[number]);
+  if (leftIndex >= 0 || rightIndex >= 0) {
+    if (leftIndex < 0) return 1;
+    if (rightIndex < 0) return -1;
+    if (leftIndex !== rightIndex) return leftIndex - rightIndex;
+  }
+  return left.localeCompare(right);
+}
+
+function modelOptionsFromProvider(
+  providerId: string,
+  providerName: string,
+  model: OpenCodeModel,
+): ReadonlyArray<OpenCodeDiscoveredModel> {
+  const variantNames = Object.keys(model.variants ?? {})
+    .filter((variant) => variant.length > 0)
+    .toSorted(compareOpenCodeVariantNames);
+  return [
+    {
+    slug: `${providerId}/${model.id}`,
+    name: `${providerName} / ${model.name}`,
+      ...(variantNames.length > 0 ? { variants: variantNames } : {}),
+    },
+  ];
+}
+
+function parseProviderModels(
+  providers: ReadonlyArray<
+    Pick<OpenCodeListedProvider, "id" | "name" | "models"> | OpenCodeConfiguredProvider
+  >,
+): ReadonlyArray<OpenCodeDiscoveredModel> {
+  return providers.flatMap((provider) => {
+    const providerName = provider.name || provider.id;
+    return Object.values(provider.models).flatMap((model) =>
+      modelOptionsFromProvider(provider.id, providerName, model),
+    );
   });
 }
 
 function parseConnectedProviderModels(
-  payload: unknown,
-): ReadonlyArray<{ slug: string; name: string }> {
-  const body = asRecord(payload);
-  const all = asArray(body?.all) ?? [];
-  const connected = new Set(
-    (asArray(body?.connected) ?? [])
-      .map((entry) => asString(entry))
-      .filter((entry): entry is string => Boolean(entry)),
-  );
+  payload: {
+    all: ReadonlyArray<OpenCodeListedProvider>;
+    connected: ReadonlyArray<string>;
+  },
+): ReadonlyArray<OpenCodeDiscoveredModel> {
+  const connected = new Set(payload.connected);
   if (connected.size === 0) {
     return [];
   }
   return parseProviderModels(
-    all.filter((entry) => {
-      const provider = asRecord(entry);
-      const id = asString(provider?.id);
-      return typeof id === "string" && connected.has(id);
-    }),
+    payload.all.filter((provider) => connected.has(provider.id)),
   );
 }
 
@@ -372,6 +397,36 @@ function toToolLifecycleEventType(
 
 async function readJsonData<T>(promise: Promise<T>): Promise<T> {
   return promise;
+}
+
+function readProviderListResponse(
+  value:
+    | ProviderListResponse
+    | { data: ProviderListResponse; error?: undefined }
+    | { data?: undefined; error: unknown },
+): ProviderListResponse {
+  if ("all" in value && "connected" in value) {
+    return value;
+  }
+  if (value.data !== undefined) {
+    return value.data;
+  }
+  throw new Error("OpenCode SDK returned an empty provider list response");
+}
+
+function readConfigProvidersResponse(
+  value:
+    | ConfigProvidersResponse
+    | { data: ConfigProvidersResponse; error?: undefined }
+    | { data?: undefined; error: unknown },
+): ConfigProvidersResponse {
+  if ("providers" in value) {
+    return value;
+  }
+  if (value.data !== undefined) {
+    return value.data;
+  }
+  throw new Error("OpenCode SDK returned an empty config providers response");
 }
 
 function stripTransientSessionFields(session: ProviderSession) {
@@ -524,6 +579,10 @@ export class OpenCodeServerManager extends EventEmitter<OpenCodeManagerEvents> {
     const parsedModel = parseOpencodeModel(input.model);
     const providerId = input.modelOptions?.opencode?.providerId ?? parsedModel?.providerId;
     const modelId = input.modelOptions?.opencode?.modelId ?? parsedModel?.modelId ?? input.model;
+    const variant =
+      input.modelOptions?.opencode?.variant ??
+      input.modelOptions?.opencode?.reasoningEffort ??
+      parsedModel?.variant;
     const startedAt = nowIso();
 
     context.activeTurnId = turnId;
@@ -572,6 +631,7 @@ export class OpenCodeServerManager extends EventEmitter<OpenCodeManagerEvents> {
               }
             : {}),
           ...(agent ? { agent } : {}),
+          ...(variant ? { variant } : {}),
           parts: [textPart(input.input ?? "")],
         }),
       );
@@ -728,7 +788,7 @@ export class OpenCodeServerManager extends EventEmitter<OpenCodeManagerEvents> {
 
   async listModels(
     options?: OpenCodeModelDiscoveryOptions,
-  ): Promise<ReadonlyArray<{ slug: string; name: string }>> {
+  ): Promise<ReadonlyArray<OpenCodeDiscoveredModel>> {
     const shared = await this.ensureServer(options);
     const client = await this.createClient({
       baseUrl: shared.baseUrl,
@@ -743,17 +803,17 @@ export class OpenCodeServerManager extends EventEmitter<OpenCodeManagerEvents> {
           }
         : {}),
     });
-    const payload = await readJsonData(
-      client.provider.list(options?.workspace ? { workspace: options.workspace } : {}),
+    const payload = readProviderListResponse(
+      await readJsonData(client.provider.list(options?.workspace ? { workspace: options.workspace } : {})),
     );
     const listed = parseConnectedProviderModels(payload);
     if (listed.length > 0) {
       return listed;
     }
-    const configured = await readJsonData(
-      client.config.providers(options?.workspace ? { workspace: options.workspace } : {}),
+    const configured = readConfigProvidersResponse(
+      await readJsonData(client.config.providers(options?.workspace ? { workspace: options.workspace } : {})),
     );
-    return parseProviderModels(asRecord(configured)?.providers);
+    return parseProviderModels(configured.providers);
   }
 
   stopSession(threadId: ThreadId): void {

@@ -3,6 +3,17 @@ import { ProviderKind } from "./orchestration";
 
 export const CODEX_REASONING_EFFORT_OPTIONS = ["xhigh", "high", "medium", "low"] as const;
 export type CodexReasoningEffort = (typeof CODEX_REASONING_EFFORT_OPTIONS)[number];
+export const OPENCODE_REASONING_EFFORT_OPTIONS = [
+  "none",
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "max",
+] as const;
+export type OpenCodeReasoningEffort = (typeof OPENCODE_REASONING_EFFORT_OPTIONS)[number];
+export type ReasoningEffort = CodexReasoningEffort | OpenCodeReasoningEffort;
 
 export const CodexModelOptions = Schema.Struct({
   reasoningEffort: Schema.optional(Schema.Literals(CODEX_REASONING_EFFORT_OPTIONS)),
@@ -13,6 +24,8 @@ export type CodexModelOptions = typeof CodexModelOptions.Type;
 export const OpencodeModelOptions = Schema.Struct({
   providerId: Schema.optional(Schema.String),
   modelId: Schema.optional(Schema.String),
+  variant: Schema.optional(Schema.String),
+  reasoningEffort: Schema.optional(Schema.Literals(OPENCODE_REASONING_EFFORT_OPTIONS)),
   agent: Schema.optional(Schema.String),
 });
 export type OpencodeModelOptions = typeof OpencodeModelOptions.Type;
@@ -26,6 +39,7 @@ export type ProviderModelOptions = typeof ProviderModelOptions.Type;
 type ModelOption = {
   readonly slug: string;
   readonly name: string;
+  readonly variants?: readonly OpenCodeReasoningEffort[];
 };
 
 export const MODEL_OPTIONS_BY_PROVIDER = {
@@ -61,10 +75,10 @@ export const MODEL_SLUG_ALIASES_BY_PROVIDER = {
 
 export const REASONING_EFFORT_OPTIONS_BY_PROVIDER = {
   codex: CODEX_REASONING_EFFORT_OPTIONS,
-  opencode: [],
-} as const satisfies Record<ProviderKind, readonly CodexReasoningEffort[]>;
+  opencode: OPENCODE_REASONING_EFFORT_OPTIONS,
+} as const satisfies Record<ProviderKind, readonly ReasoningEffort[]>;
 
 export const DEFAULT_REASONING_EFFORT_BY_PROVIDER = {
   codex: "high",
   opencode: null,
-} as const satisfies Record<ProviderKind, CodexReasoningEffort | null>;
+} as const satisfies Record<ProviderKind, ReasoningEffort | null>;
