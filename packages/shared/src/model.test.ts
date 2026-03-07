@@ -50,6 +50,17 @@ describe("resolveModelSlug", () => {
       expect(resolveModelSlug(model.slug)).toBe(model.slug);
     }
   });
+
+  it("passes through dynamic provider models when provider catalog is empty", () => {
+    expect(MODEL_OPTIONS_BY_PROVIDER.opencode).toHaveLength(0);
+    expect(resolveModelSlug("opencode/big-pickle", "opencode")).toBe("opencode/big-pickle");
+  });
+
+  it("keeps provider default when dynamic provider model is missing", () => {
+    expect(resolveModelSlug(undefined, "opencode")).toBe(DEFAULT_MODEL_BY_PROVIDER.opencode);
+    expect(resolveModelSlug("   ", "opencode")).toBe(DEFAULT_MODEL_BY_PROVIDER.opencode);
+  });
+
   it("keeps codex defaults for backward compatibility", () => {
     expect(getDefaultModel()).toBe(DEFAULT_MODEL_BY_PROVIDER.codex);
     expect(getModelOptions()).toEqual(MODEL_OPTIONS_BY_PROVIDER.codex);

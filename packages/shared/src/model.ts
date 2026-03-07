@@ -50,9 +50,12 @@ export function resolveModelSlug(
     return getDefaultModel(provider);
   }
 
-  return MODEL_SLUG_SET_BY_PROVIDER[provider].has(normalized)
-    ? normalized
-    : getDefaultModel(provider);
+  const catalog = MODEL_SLUG_SET_BY_PROVIDER[provider];
+  if (catalog.size === 0) {
+    return normalized;
+  }
+
+  return catalog.has(normalized) ? normalized : getDefaultModel(provider);
 }
 
 export function resolveModelSlugForProvider(
