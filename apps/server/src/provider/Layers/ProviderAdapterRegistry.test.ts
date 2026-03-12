@@ -47,6 +47,7 @@ const fakeOpenCodeAdapter: OpenCodeAdapterShape = {
 
 const layer = it.layer(
   Layer.mergeAll(
+<<<<<<< HEAD
     Layer.provide(
       ProviderAdapterRegistryLive,
       Layer.mergeAll(
@@ -54,6 +55,9 @@ const layer = it.layer(
         Layer.succeed(OpenCodeAdapter, fakeOpenCodeAdapter),
       ),
     ),
+=======
+    Layer.provide(ProviderAdapterRegistryLive, Layer.succeed(CodexAdapter, fakeCodexAdapter)),
+>>>>>>> origin/main
     NodeServices.layer,
   ),
 );
