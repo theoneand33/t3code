@@ -788,6 +788,18 @@ async function installDownloadedUpdate(): Promise<{ accepted: boolean; completed
 }
 
 function configureAutoUpdater(): void {
+  // Check if update configuration exists (app-update.yml)
+  const appUpdateYml = readAppUpdateYml();
+  if (!appUpdateYml) {
+    console.info("[desktop-updater] No update configuration found (app-update.yml missing); auto-updates disabled.");
+    setUpdateState({
+      ...createInitialDesktopUpdateState(app.getVersion(), desktopRuntimeInfo),
+      enabled: false,
+      status: "disabled" as const,
+    });
+    return;
+  }
+
   const enabled = shouldEnableAutoUpdates();
   setUpdateState({
     ...createInitialDesktopUpdateState(app.getVersion(), desktopRuntimeInfo),
@@ -1199,6 +1211,12 @@ function getIconOption(): { icon: string } | Record<string, never> {
 }
 
 function createWindow(): BrowserWindow {
+  // Force X11 on Linux to avoid Wayland/Vulkan/color management issues
+  if (process.platform === "linux" && !process.env.ELECTRON_RUN_AS_NODE) {
+    process.env.OZONE_PLATFORM = "x11";
+    process.env.ELECTRON_DISABLE_VULKAN = "1";
+  }
+
   const window = new BrowserWindow({
     width: 1100,
     height: 780,

@@ -52,7 +52,6 @@ const CodexProviderStartOptions = Schema.Struct({
   homePath: Schema.optional(TrimmedNonEmptyStringSchema),
 });
 
-<<<<<<< HEAD
 const OpencodeProviderStartOptions = Schema.Struct({
   serverUrl: Schema.optional(TrimmedNonEmptyStringSchema),
   binaryPath: Schema.optional(TrimmedNonEmptyStringSchema),
@@ -63,10 +62,7 @@ const OpencodeProviderStartOptions = Schema.Struct({
   password: Schema.optional(TrimmedNonEmptyStringSchema),
 });
 
-const ProviderStartOptions = Schema.Struct({
-=======
 export const ProviderStartOptions = Schema.Struct({
->>>>>>> origin/main
   codex: Schema.optional(CodexProviderStartOptions),
   opencode: Schema.optional(OpencodeProviderStartOptions),
 });

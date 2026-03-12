@@ -29,6 +29,9 @@ const AppSettingsSchema = Schema.Struct({
     Schema.withDecodingDefault(() => []),
     Schema.withConstructorDefault(() => Option.some([])),
   ),
+  opencodeBinaryPath: Schema.String.check(Schema.isMaxLength(4096)).pipe(
+    Schema.withConstructorDefault(() => Option.some("")),
+  ),
 });
 export type AppSettings = typeof AppSettingsSchema.Type;
 export interface AppModelOption {

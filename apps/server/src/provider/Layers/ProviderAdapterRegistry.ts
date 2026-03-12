@@ -24,7 +24,6 @@ export interface ProviderAdapterRegistryLiveOptions {
 
 const makeProviderAdapterRegistry = (options?: ProviderAdapterRegistryLiveOptions) =>
   Effect.gen(function* () {
-<<<<<<< HEAD
     const adapters =
       options?.adapters !== undefined
         ? options.adapters
@@ -35,9 +34,6 @@ const makeProviderAdapterRegistry = (options?: ProviderAdapterRegistryLiveOption
               onSome: (adapter) => [adapter],
             }),
           ];
-=======
-    const adapters = options?.adapters !== undefined ? options.adapters : [yield* CodexAdapter];
->>>>>>> origin/main
     const byProvider = new Map(adapters.map((adapter) => [adapter.provider, adapter]));
 
     const getByProvider: ProviderAdapterRegistryShape["getByProvider"] = (provider) => {

@@ -13,21 +13,12 @@ import type {
   ServerProviderAuthStatus,
   ServerProviderStatus,
   ServerProviderStatusState,
-<<<<<<< HEAD
-} from '@t3tools/contracts';
-import { Data, Effect, Layer, Option, Result, Stream } from 'effect';
-import { ChildProcess, ChildProcessSpawner } from 'effect/unstable/process';
-
-import { ServerConfig } from '../../config';
-import { fetchOpenCodeModels } from '../../opencodeServerManager';
-import {
-  ProviderHealth,
-  type ProviderHealthShape,
-} from '../Services/ProviderHealth';
-=======
 } from "@t3tools/contracts";
-import { Array, Effect, Fiber, FileSystem, Layer, Option, Path, Result, Stream } from "effect";
+import { Array, Data, Effect, FileSystem, Layer, Option, Path, Result, Stream } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
+
+import { ServerConfig } from "../../config";
+import { fetchOpenCodeModels } from "../../opencodeServerManager";
 
 import {
   formatCodexCliUpgradeMessage,
@@ -35,7 +26,6 @@ import {
   parseCodexCliVersion,
 } from "../codexCliVersion";
 import { ProviderHealth, type ProviderHealthShape } from "../Services/ProviderHealth";
->>>>>>> origin/main
 
 const DEFAULT_TIMEOUT_MS = 4_000;
 const DEFAULT_OPENCODE_SERVER_URL = 'http://127.0.0.1:6733';
@@ -411,9 +401,6 @@ export const checkCodexProviderStatus: Effect.Effect<
   }
 
   // Probe 2: `codex login status` — is the user authenticated?
-<<<<<<< HEAD
-  const authProbe = yield* runCodexCommand(['login', 'status']).pipe(
-=======
   //
   // Custom model providers (e.g. Portkey, Azure OpenAI proxy) handle
   // authentication through their own environment variables, so `codex
@@ -431,7 +418,6 @@ export const checkCodexProviderStatus: Effect.Effect<
   }
 
   const authProbe = yield* runCodexCommand(["login", "status"]).pipe(
->>>>>>> origin/main
     Effect.timeoutOption(DEFAULT_TIMEOUT_MS),
     Effect.result,
   );
@@ -541,7 +527,6 @@ export const checkOpenCodeProviderStatus: Effect.Effect<
 export const ProviderHealthLive = Layer.effect(
   ProviderHealth,
   Effect.gen(function* () {
-<<<<<<< HEAD
     const serverConfig = yield* ServerConfig;
     const codexStatus = yield* checkCodexProviderStatus;
     const opencodeBaseStatus = yield* checkOpenCodeProviderStatus;
@@ -595,15 +580,6 @@ export const ProviderHealthLive = Layer.effect(
 
     return {
       getStatuses: Effect.succeed([codexStatus, opencodeStatus]),
-=======
-    const codexStatusFiber = yield* checkCodexProviderStatus.pipe(
-      Effect.map(Array.of),
-      Effect.forkScoped,
-    );
-
-    return {
-      getStatuses: Fiber.join(codexStatusFiber),
->>>>>>> origin/main
     } satisfies ProviderHealthShape;
   }),
 );

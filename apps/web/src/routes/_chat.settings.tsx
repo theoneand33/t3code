@@ -111,6 +111,7 @@ function SettingsRouteView() {
 
   const codexBinaryPath = settings.codexBinaryPath;
   const codexHomePath = settings.codexHomePath;
+  const opencodeBinaryPath = settings.opencodeBinaryPath;
   const keybindingsConfigPath = serverConfigQuery.data?.keybindingsConfigPath ?? null;
 
   const openKeybindingsFile = useCallback(() => {
@@ -313,6 +314,52 @@ function SettingsRouteView() {
                     }
                   >
                     Reset codex overrides
+                  </Button>
+                </div>
+              </div>
+            </section>
+
+            <section className="rounded-2xl border border-border bg-card p-5">
+              <div className="mb-4">
+                <h2 className="text-sm font-medium text-foreground">OpenCode App Server</h2>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  These overrides apply to new sessions and let you use a non-default OpenCode install.
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                <label htmlFor="opencode-binary-path" className="block space-y-1">
+                  <span className="text-xs font-medium text-foreground">OpenCode binary path</span>
+                  <Input
+                    id="opencode-binary-path"
+                    value={opencodeBinaryPath}
+                    onChange={(event) => updateSettings({ opencodeBinaryPath: event.target.value })}
+                    placeholder="opencode"
+                    spellCheck={false}
+                  />
+                  <span className="text-xs text-muted-foreground">
+                    Leave blank to use <code>opencode</code> from your PATH.
+                  </span>
+                </label>
+
+                <div className="flex flex-col gap-3 text-xs text-muted-foreground sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0 flex-1">
+                    <p>Binary source</p>
+                    <p className="mt-1 break-all font-mono text-[11px] text-foreground">
+                      {opencodeBinaryPath || "PATH"}
+                    </p>
+                  </div>
+                  <Button
+                    size="xs"
+                    variant="outline"
+                    className="self-start"
+                    onClick={() =>
+                      updateSettings({
+                        opencodeBinaryPath: defaults.opencodeBinaryPath,
+                      })
+                    }
+                  >
+                    Reset opencode overrides
                   </Button>
                 </div>
               </div>

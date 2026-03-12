@@ -4,6 +4,7 @@ import {
   EDITORS,
   type EditorId,
   type KeybindingCommand,
+  type CodexReasoningEffort,
   type MessageId,
   type ProjectId,
   type ProjectEntry,
@@ -20,7 +21,6 @@ import {
   OrchestrationThreadActivity,
   RuntimeMode,
   ProviderInteractionMode,
-  type ReasoningEffort,
 } from "@t3tools/contracts";
 import {
   getDefaultModel,
@@ -316,10 +316,7 @@ function buildExpandedImagePreview(
     return null;
   }
   return {
-    images: previewableImages.map((image) => ({
-      src: image.src,
-      name: image.name,
-    })),
+    images: previewableImages.map((image) => ({ src: image.src, name: image.name })),
     index: selectedIndex,
   };
 }
@@ -767,7 +764,6 @@ export default function ChatView({ threadId }: ChatViewProps) {
   const activeLatestTurn = activeThread?.latestTurn ?? null;
   const latestTurnSettled = isLatestTurnSettled(activeLatestTurn, activeThread?.session ?? null);
   const activeProject = projects.find((p) => p.id === activeThread?.projectId);
-  const serverConfigQuery = useQuery(serverConfigQueryOptions());
 
   const openPullRequestDialog = useCallback(
     (reference?: string) => {
@@ -858,7 +854,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
     const lastVisitedAt = activeThread.lastVisitedAt ? Date.parse(activeThread.lastVisitedAt) : NaN;
     if (!Number.isNaN(lastVisitedAt) && lastVisitedAt >= turnCompletedAt) return;
 
-    markThreadVisited(activeThread.id, activeLatestTurn.completedAt);
+    markThreadVisited(activeThread.id);
   }, [
     activeThread?.id,
     activeThread?.lastVisitedAt,
@@ -883,16 +879,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
     selectedProvider,
     activeThread?.model ?? activeProject?.model ?? getDefaultModel(selectedProvider),
   );
-  const modelOptionsByProvider = useMemo(
-    () =>
-      getCustomModelOptionsByProvider(
-        settings,
-        serverConfigQuery.data?.providers ?? EMPTY_PROVIDER_STATUSES,
-      ),
-    [serverConfigQuery.data?.providers, settings],
-  );
-  const customModelsForSelectedProvider = getCustomModelsForProvider(settings, selectedProvider);
-  const builtInModelsForSelectedProvider = modelOptionsByProvider[selectedProvider];
+  const customModelsForSelectedProvider = settings.customCodexModels;
   const selectedModel = useMemo(() => {
     const draftModel = composerDraft.model;
     if (!draftModel) {
@@ -902,17 +889,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
       selectedProvider,
       customModelsForSelectedProvider,
       draftModel,
-      builtInModelsForSelectedProvider,
     ) as ModelSlug;
-<<<<<<< HEAD
-  }, [
-    baseThreadModel,
-    builtInModelsForSelectedProvider,
-    composerDraft.model,
-    customModelsForSelectedProvider,
-    selectedProvider,
-  ]);
-=======
   }, [baseThreadModel, composerDraft.model, customModelsForSelectedProvider, selectedProvider]);
   const reasoningOptions = getReasoningEffortOptions(selectedProvider);
   const supportsReasoningEffort = reasoningOptions.length > 0;
@@ -930,63 +907,40 @@ export default function ChatView({ threadId }: ChatViewProps) {
     return Object.keys(codexOptions).length > 0 ? { codex: codexOptions } : undefined;
   }, [selectedCodexFastModeEnabled, selectedEffort, selectedProvider, supportsReasoningEffort]);
   const providerOptionsForDispatch = useMemo(() => {
-    if (!settings.codexBinaryPath && !settings.codexHomePath) {
+    const hasCodex = settings.codexBinaryPath || settings.codexHomePath;
+    const hasOpencode = settings.opencodeBinaryPath;
+    if (!hasCodex && !hasOpencode) {
       return undefined;
     }
     return {
-      codex: {
-        ...(settings.codexBinaryPath ? { binaryPath: settings.codexBinaryPath } : {}),
-        ...(settings.codexHomePath ? { homePath: settings.codexHomePath } : {}),
-      },
+      ...(hasCodex
+        ? {
+            codex: {
+              ...(settings.codexBinaryPath ? { binaryPath: settings.codexBinaryPath } : {}),
+              ...(settings.codexHomePath ? { homePath: settings.codexHomePath } : {}),
+            },
+          }
+        : {}),
+      ...(hasOpencode ? { opencode: { binaryPath: settings.opencodeBinaryPath } } : {}),
     };
-  }, [settings.codexBinaryPath, settings.codexHomePath]);
->>>>>>> origin/main
+  }, [settings.codexBinaryPath, settings.codexHomePath, settings.opencodeBinaryPath]);
   const selectedModelForPicker = selectedModel;
+  const modelOptionsByProvider = useMemo(
+    () => getCustomModelOptionsByProvider(settings),
+    [settings],
+  );
   const selectedModelForPickerWithCustomFallback = useMemo(() => {
-    const currentOptions = modelOptionsByProvider[selectedProvider];
+    const currentOptions = modelOptionsByProvider[selectedProvider] ?? [];
     return currentOptions.some((option) => option.slug === selectedModelForPicker)
       ? selectedModelForPicker
       : (normalizeModelSlug(selectedModelForPicker, selectedProvider) ?? selectedModelForPicker);
   }, [modelOptionsByProvider, selectedModelForPicker, selectedProvider]);
-  const opencodeReasoningOptions = useMemo(
-    () =>
-      getOpenCodeReasoningOptions(
-        serverConfigQuery.data?.providers ?? EMPTY_PROVIDER_STATUSES,
-        selectedModelForPickerWithCustomFallback,
-      ),
-    [selectedModelForPickerWithCustomFallback, serverConfigQuery.data?.providers],
-  );
-  const reasoningOptions =
-    selectedProvider === "opencode"
-      ? opencodeReasoningOptions
-      : getReasoningEffortOptions(selectedProvider);
-  const supportsReasoningEffort = reasoningOptions.length > 0;
-  const selectedEffort = composerDraft.effort ?? getDefaultReasoningEffort(selectedProvider);
-  const selectedCodexFastModeEnabled =
-    selectedProvider === "codex" ? composerDraft.codexFastMode : false;
-  const selectedModelOptionsForDispatch = useMemo(() => {
-    if (selectedProvider === "codex") {
-      const reasoningEffort =
-        selectedEffort && isCodexReasoningEffort(selectedEffort) ? selectedEffort : undefined;
-      const codexOptions = {
-        ...(supportsReasoningEffort && reasoningEffort ? { reasoningEffort } : {}),
-        ...(selectedCodexFastModeEnabled ? { fastMode: true } : {}),
-      };
-      return Object.keys(codexOptions).length > 0 ? { codex: codexOptions } : undefined;
-    }
-    if (selectedProvider === "opencode") {
-      const reasoningEffort =
-        selectedEffort && isOpenCodeReasoningEffort(selectedEffort) ? selectedEffort : undefined;
-      return reasoningEffort ? { opencode: { reasoningEffort } } : undefined;
-    }
-    return undefined;
-  }, [selectedCodexFastModeEnabled, selectedEffort, selectedProvider, supportsReasoningEffort]);
   const searchableModelOptions = useMemo(
     () =>
       AVAILABLE_PROVIDER_OPTIONS.filter(
         (option) => lockedProvider === null || option.value === lockedProvider,
       ).flatMap((option) =>
-        modelOptionsByProvider[option.value].map(({ slug, name }) => ({
+        (modelOptionsByProvider[option.value] ?? []).map(({ slug, name }) => ({
           provider: option.value,
           providerLabel: option.label,
           slug,
@@ -1321,6 +1275,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
   );
   const effectivePathQuery = pathTriggerQuery.length > 0 ? debouncedPathQuery : "";
   const branchesQuery = useQuery(gitBranchesQueryOptions(gitCwd));
+  const serverConfigQuery = useQuery(serverConfigQueryOptions());
   const workspaceEntriesQuery = useQuery(
     projectSearchEntriesQueryOptions({
       cwd: gitCwd,
@@ -1545,11 +1500,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
               .clear({ threadId: activeThreadId, terminalId })
               .catch(() => undefined);
           }
-          await api.terminal.close({
-            threadId: activeThreadId,
-            terminalId,
-            deleteHistory: true,
-          });
+          await api.terminal.close({ threadId: activeThreadId, terminalId, deleteHistory: true });
         })().catch(() => fallbackExitWrite());
       } else {
         void fallbackExitWrite();
@@ -2391,9 +2342,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
         terminalOpen: Boolean(terminalState.terminalOpen),
       };
 
-      const command = resolveShortcutCommand(event, keybindings, {
-        context: shortcutContext,
-      });
+      const command = resolveShortcutCommand(event, keybindings, { context: shortcutContext });
       if (!command) return;
 
       if (command === "terminal.toggle") {
@@ -3289,27 +3238,21 @@ export default function ChatView({ threadId }: ChatViewProps) {
       setComposerDraftProvider(activeThread.id, provider);
       setComposerDraftModel(
         activeThread.id,
-        resolveAppModelSelection(
-          provider,
-          getCustomModelsForProvider(settings, provider),
-          model,
-          modelOptionsByProvider[provider],
-        ),
+        resolveAppModelSelection(provider, settings.customCodexModels, model),
       );
       scheduleComposerFocus();
     },
     [
       activeThread,
       lockedProvider,
-      modelOptionsByProvider,
       scheduleComposerFocus,
       setComposerDraftModel,
       setComposerDraftProvider,
-      settings,
+      settings.customCodexModels,
     ],
   );
   const onEffortSelect = useCallback(
-    (effort: ReasoningEffort | null) => {
+    (effort: CodexReasoningEffort) => {
       setComposerDraftEffort(threadId, effort);
       scheduleComposerFocus();
     },
@@ -3375,10 +3318,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
     [activePendingProgress?.activeQuestion, activePendingUserInput, setPrompt],
   );
 
-  const readComposerSnapshot = useCallback((): {
-    value: string;
-    cursor: number;
-  } => {
+  const readComposerSnapshot = useCallback((): { value: string; cursor: number } => {
     const editorSnapshot = composerEditorRef.current?.readSnapshot();
     if (editorSnapshot) {
       return editorSnapshot;
@@ -3736,138 +3676,6 @@ export default function ChatView({ threadId }: ChatViewProps) {
                   </div>
                 ) : null}
 
-<<<<<<< HEAD
-              {!isComposerApprovalState &&
-                pendingUserInputs.length === 0 &&
-                composerImages.length > 0 && (
-                  <div className="mb-3 flex flex-wrap gap-2">
-                    {composerImages.map((image) => (
-                      <div
-                        key={image.id}
-                        className="relative h-16 w-16 overflow-hidden rounded-lg border border-border/80 bg-background"
-                      >
-                        {image.previewUrl ? (
-                          <button
-                            type="button"
-                            className="h-full w-full cursor-zoom-in"
-                            aria-label={`Preview ${image.name}`}
-                            onClick={() => {
-                              const preview = buildExpandedImagePreview(composerImages, image.id);
-                              if (!preview) return;
-                              setExpandedImage(preview);
-                            }}
-                          >
-                            <img
-                              src={image.previewUrl}
-                              alt={image.name}
-                              className="h-full w-full object-cover"
-                            />
-                          </button>
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center px-1 text-center text-[10px] text-muted-foreground/70">
-                            {image.name}
-                          </div>
-                        )}
-                        {nonPersistedComposerImageIdSet.has(image.id) && (
-                          <Tooltip>
-                            <TooltipTrigger
-                              render={
-                                <span
-                                  role="img"
-                                  aria-label="Draft attachment may not persist"
-                                  className="absolute left-1 top-1 inline-flex items-center justify-center rounded bg-background/85 p-0.5 text-amber-600"
-                                >
-                                  <CircleAlertIcon className="size-3" />
-                                </span>
-                              }
-                            />
-                            <TooltipPopup
-                              side="top"
-                              className="max-w-64 whitespace-normal leading-tight"
-                            >
-                              Draft attachment could not be saved locally and may be lost on
-                              navigation.
-                            </TooltipPopup>
-                          </Tooltip>
-                        )}
-                        <Button
-                          variant="ghost"
-                          size="icon-xs"
-                          className="absolute right-1 top-1 bg-background/80 hover:bg-background/90"
-                          onClick={() => removeComposerImage(image.id)}
-                          aria-label={`Remove ${image.name}`}
-                        >
-                          <XIcon />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              <ComposerPromptEditor
-                ref={composerEditorRef}
-                value={
-                  isComposerApprovalState
-                    ? ""
-                    : activePendingProgress
-                      ? activePendingProgress.customAnswer
-                      : prompt
-                }
-                cursor={composerCursor}
-                onChange={onPromptChange}
-                onCommandKeyDown={onComposerCommandKey}
-                onPaste={onComposerPaste}
-                placeholder={
-                  isComposerApprovalState
-                    ? (activePendingApproval?.detail ?? "Resolve this approval request to continue")
-                    : activePendingProgress
-                      ? "Type your own answer, or leave this blank to use the selected option"
-                      : showPlanFollowUpPrompt && activeProposedPlan
-                        ? "Add feedback to refine the plan, or leave this blank to implement it"
-                        : phase === "disconnected"
-                          ? "Ask for follow-up changes or attach images"
-                          : "Ask anything, @tag files/folders, or use /model"
-                }
-                disabled={isConnecting || isComposerApprovalState}
-              />
-            </div>
-
-            {/* Bottom toolbar */}
-            {activePendingApproval ? (
-              <div className="flex items-center justify-end gap-2 px-2.5 pb-2.5 sm:px-3 sm:pb-3">
-                <ComposerPendingApprovalActions
-                  requestId={activePendingApproval.requestId}
-                  isResponding={respondingRequestIds.includes(activePendingApproval.requestId)}
-                  onRespondToApproval={onRespondToApproval}
-                />
-              </div>
-            ) : (
-              <div className="flex flex-wrap items-center justify-between gap-2 px-2.5 pb-2.5 sm:flex-nowrap sm:gap-0 sm:px-3 sm:pb-3">
-                <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:min-w-max sm:overflow-visible">
-                  {/* Provider/model picker */}
-                  <ProviderModelPicker
-                    provider={selectedProvider}
-                    model={selectedModelForPickerWithCustomFallback}
-                    lockedProvider={lockedProvider}
-                    modelOptionsByProvider={modelOptionsByProvider}
-                    serviceTierSetting={selectedServiceTierSetting}
-                    onProviderModelChange={onProviderModelSelect}
-                  />
-
-                  {supportsReasoningEffort ? (
-                    <>
-                      <Separator orientation="vertical" className="mx-0.5 hidden h-4 sm:block" />
-                      <ReasoningTraitsPicker
-                        effort={selectedEffort}
-                        defaultEffort={getDefaultReasoningEffort(selectedProvider)}
-                        options={reasoningOptions}
-                        onEffortChange={onEffortSelect}
-                        {...(selectedProvider === "codex"
-                          ? {
-                              fastModeEnabled: selectedCodexFastModeEnabled,
-                              onFastModeChange: onCodexFastModeChange,
-                            }
-                          : {})}
-=======
                 {/* Textarea area */}
                 <div
                   className={cn(
@@ -3885,7 +3693,6 @@ export default function ChatView({ threadId }: ChatViewProps) {
                         activeItemId={activeComposerMenuItem?.id ?? null}
                         onHighlightedItemChange={onComposerMenuItemHighlighted}
                         onSelect={onSelectComposerItem}
->>>>>>> origin/main
                       />
                     </div>
                   )}
@@ -5853,81 +5660,23 @@ function isAvailableProviderOption(option: (typeof PROVIDER_OPTIONS)[number]): o
 
 const AVAILABLE_PROVIDER_OPTIONS = PROVIDER_OPTIONS.filter(isAvailableProviderOption);
 const UNAVAILABLE_PROVIDER_OPTIONS = PROVIDER_OPTIONS.filter((option) => !option.available);
-const COMING_SOON_PROVIDER_OPTIONS = [{ id: "gemini", label: "Gemini", icon: Gemini }] as const;
+const COMING_SOON_PROVIDER_OPTIONS = [
+  { id: "opencode", label: "OpenCode", icon: OpenCodeIcon },
+  { id: "gemini", label: "Gemini", icon: Gemini },
+] as const;
 
-function getCustomModelOptionsByProvider(
-  settings: {
-    customCodexModels: readonly string[];
-    customOpencodeModels: readonly string[];
-  },
-  providerStatuses: ReadonlyArray<ServerProviderStatus>,
-): Record<ProviderKind, ReadonlyArray<{ slug: string; name: string }>> {
-  const opencodeModels =
-    providerStatuses.find((status) => status.provider === "opencode")?.models ?? [];
+function getCustomModelOptionsByProvider(settings: {
+  customCodexModels: readonly string[];
+}): Record<ProviderKind, ReadonlyArray<{ slug: string; name: string }>> {
   return {
     codex: getAppModelOptions("codex", settings.customCodexModels),
-    opencode: getAppModelOptions(
-      "opencode",
-      settings.customOpencodeModels,
-      undefined,
-      opencodeModels,
-    ),
+    opencode: getAppModelOptions("opencode", settings.customCodexModels),
   };
-}
-
-function getCustomModelsForProvider(
-  settings: {
-    customCodexModels: readonly string[];
-    customOpencodeModels: readonly string[];
-  },
-  provider: ProviderKind,
-) {
-  return provider === "opencode" ? settings.customOpencodeModels : settings.customCodexModels;
-}
-
-const OPEN_CODE_REASONING_OPTIONS = new Set<ReasoningEffort>([
-  "none",
-  "minimal",
-  "low",
-  "medium",
-  "high",
-  "xhigh",
-  "max",
-]);
-const CODEX_REASONING_OPTIONS = new Set<ReasoningEffort>(["low", "medium", "high", "xhigh"]);
-
-function isCodexReasoningEffort(value: ReasoningEffort): value is Extract<ReasoningEffort, "low" | "medium" | "high" | "xhigh"> {
-  return CODEX_REASONING_OPTIONS.has(value);
-}
-
-function isOpenCodeReasoningEffort(
-  value: ReasoningEffort,
-): value is Extract<ReasoningEffort, "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max"> {
-  return OPEN_CODE_REASONING_OPTIONS.has(value);
-}
-
-function getOpenCodeReasoningOptions(
-  providerStatuses: ReadonlyArray<ServerProviderStatus>,
-  selectedModel: string | null | undefined,
-): ReadonlyArray<ReasoningEffort> {
-  if (!selectedModel) {
-    return [];
-  }
-
-  const model = providerStatuses
-    .find((status) => status.provider === "opencode")
-    ?.models?.find((entry) => entry.slug === selectedModel);
-
-  if (!model?.variants || model.variants.length === 0) {
-    return [];
-  }
-
-  return [...OPEN_CODE_REASONING_OPTIONS].filter((option) => model.variants?.includes(option));
 }
 
 const PROVIDER_ICON_BY_PROVIDER: Record<ProviderPickerKind, Icon> = {
   codex: OpenAI,
-  opencode: OpenCodeIcon,
+  opencode: OpenAI,
   claudeCode: ClaudeAI,
   cursor: CursorIcon,
 };
@@ -6008,13 +5757,6 @@ const ProviderModelPicker = memo(function ProviderModelPicker(props: {
           className={cn("flex min-w-0 items-center gap-2", props.compact ? "max-w-36" : undefined)}
         >
           <ProviderIcon aria-hidden="true" className="size-4 shrink-0 text-muted-foreground/70" />
-<<<<<<< HEAD
-          {props.provider === "codex" &&
-          shouldShowFastTierIcon(props.model, props.serviceTierSetting) ? (
-            <ZapIcon className="size-3.5 shrink-0 text-amber-500" />
-          ) : null}
-=======
->>>>>>> origin/main
           <span className="truncate">{selectedModelLabel}</span>
           <ChevronDownIcon aria-hidden="true" className="size-3 opacity-60" />
         </span>
@@ -6044,14 +5786,14 @@ const ProviderModelPicker = memo(function ProviderModelPicker(props: {
                       const resolvedModel = resolveModelForProviderPicker(
                         option.value,
                         value,
-                        props.modelOptionsByProvider[option.value],
+                        props.modelOptionsByProvider[option.value] ?? [],
                       );
                       if (!resolvedModel) return;
                       props.onProviderModelChange(option.value, resolvedModel);
                       setIsMenuOpen(false);
                     }}
                   >
-                    {props.modelOptionsByProvider[option.value].map((modelOption) => (
+                    {(props.modelOptionsByProvider[option.value] ?? []).map((modelOption) => (
                       <MenuRadioItem
                         key={`${option.value}:${modelOption.slug}`}
                         value={modelOption.slug}
@@ -6103,15 +5845,6 @@ const ProviderModelPicker = memo(function ProviderModelPicker(props: {
   );
 });
 
-<<<<<<< HEAD
-const ReasoningTraitsPicker = memo(function ReasoningTraitsPicker(props: {
-  effort: ReasoningEffort | null;
-  defaultEffort: ReasoningEffort | null;
-  fastModeEnabled?: boolean;
-  options: ReadonlyArray<ReasoningEffort>;
-  onEffortChange: (effort: ReasoningEffort | null) => void;
-  onFastModeChange?: (enabled: boolean) => void;
-=======
 const CompactComposerControlsMenu = memo(function CompactComposerControlsMenu(props: {
   activePlan: boolean;
   interactionMode: ProviderInteractionMode;
@@ -6234,21 +5967,17 @@ const CodexTraitsPicker = memo(function CodexTraitsPicker(props: {
   options: ReadonlyArray<CodexReasoningEffort>;
   onEffortChange: (effort: CodexReasoningEffort) => void;
   onFastModeChange: (enabled: boolean) => void;
->>>>>>> origin/main
 }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const reasoningLabelByOption: Record<ReasoningEffort, string> = {
-    none: "None",
-    minimal: "Minimal",
+  const defaultReasoningEffort = getDefaultReasoningEffort("codex");
+  const reasoningLabelByOption: Record<CodexReasoningEffort, string> = {
     low: "Low",
     medium: "Medium",
     high: "High",
     xhigh: "Extra High",
-    max: "Max",
   };
-  const activeEffort = props.effort ?? props.defaultEffort;
   const triggerLabel = [
-    activeEffort ? reasoningLabelByOption[activeEffort] : "Default",
+    reasoningLabelByOption[props.effort],
     ...(props.fastModeEnabled ? ["Fast"] : []),
   ]
     .filter(Boolean)
@@ -6277,46 +6006,35 @@ const CodexTraitsPicker = memo(function CodexTraitsPicker(props: {
         <MenuGroup>
           <div className="px-2 py-1.5 font-medium text-muted-foreground text-xs">Reasoning</div>
           <MenuRadioGroup
-            value={props.effort ?? "default"}
+            value={props.effort}
             onValueChange={(value) => {
               if (!value) return;
-              if (value === "default") {
-                props.onEffortChange(null);
-                return;
-              }
               const nextEffort = props.options.find((option) => option === value);
               if (!nextEffort) return;
               props.onEffortChange(nextEffort);
             }}
           >
-            <MenuRadioItem value="default">
-              Default
-              {props.defaultEffort ? ` (${reasoningLabelByOption[props.defaultEffort]})` : ""}
-            </MenuRadioItem>
             {props.options.map((effort) => (
               <MenuRadioItem key={effort} value={effort}>
                 {reasoningLabelByOption[effort]}
+                {effort === defaultReasoningEffort ? " (default)" : ""}
               </MenuRadioItem>
             ))}
           </MenuRadioGroup>
         </MenuGroup>
-        {props.onFastModeChange ? (
-          <>
-            <MenuDivider />
-            <MenuGroup>
-              <div className="px-2 py-1.5 font-medium text-muted-foreground text-xs">Fast Mode</div>
-              <MenuRadioGroup
-                value={props.fastModeEnabled ? "on" : "off"}
-                onValueChange={(value) => {
-                  props.onFastModeChange?.(value === "on");
-                }}
-              >
-                <MenuRadioItem value="off">off</MenuRadioItem>
-                <MenuRadioItem value="on">on</MenuRadioItem>
-              </MenuRadioGroup>
-            </MenuGroup>
-          </>
-        ) : null}
+        <MenuDivider />
+        <MenuGroup>
+          <div className="px-2 py-1.5 font-medium text-muted-foreground text-xs">Fast Mode</div>
+          <MenuRadioGroup
+            value={props.fastModeEnabled ? "on" : "off"}
+            onValueChange={(value) => {
+              props.onFastModeChange(value === "on");
+            }}
+          >
+            <MenuRadioItem value="off">off</MenuRadioItem>
+            <MenuRadioItem value="on">on</MenuRadioItem>
+          </MenuRadioGroup>
+        </MenuGroup>
       </MenuPopup>
     </Menu>
   );
