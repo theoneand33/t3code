@@ -5667,10 +5667,11 @@ const COMING_SOON_PROVIDER_OPTIONS = [
 
 function getCustomModelOptionsByProvider(settings: {
   customCodexModels: readonly string[];
+  customOpencodeModels: readonly string[];
 }): Record<ProviderKind, ReadonlyArray<{ slug: string; name: string }>> {
   return {
     codex: getAppModelOptions("codex", settings.customCodexModels),
-    opencode: getAppModelOptions("opencode", settings.customCodexModels),
+    opencode: getAppModelOptions("opencode", settings.customOpencodeModels),
   };
 }
 
