@@ -323,7 +323,8 @@ function SettingsRouteView() {
               <div className="mb-4">
                 <h2 className="text-sm font-medium text-foreground">OpenCode App Server</h2>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  These overrides apply to new sessions and let you use a non-default OpenCode install.
+                  These overrides apply to new sessions and let you use a non-default OpenCode
+                  install.
                 </p>
               </div>
 

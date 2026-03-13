@@ -791,7 +791,9 @@ function configureAutoUpdater(): void {
   // Check if update configuration exists (app-update.yml)
   const appUpdateYml = readAppUpdateYml();
   if (!appUpdateYml) {
-    console.info("[desktop-updater] No update configuration found (app-update.yml missing); auto-updates disabled.");
+    console.info(
+      "[desktop-updater] No update configuration found (app-update.yml missing); auto-updates disabled.",
+    );
     setUpdateState({
       ...createInitialDesktopUpdateState(app.getVersion(), desktopRuntimeInfo),
       enabled: false,

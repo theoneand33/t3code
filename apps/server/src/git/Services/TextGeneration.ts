@@ -19,6 +19,10 @@ export interface CommitMessageGenerationInput {
   stagedPatch: string;
   /** When true, the model also returns a semantic branch name for the change. */
   includeBranch?: boolean;
+  /** Override the provider (e.g., "codex", "opencode"). */
+  provider?: string;
+  /** Override the model to use for generation. */
+  model?: string;
 }
 
 export interface CommitMessageGenerationResult {

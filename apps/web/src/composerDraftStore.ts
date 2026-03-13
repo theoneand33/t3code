@@ -14,9 +14,38 @@ import { create } from "zustand";
 import { createJSONStorage, persist, type StateStorage } from "zustand/middleware";
 
 export const COMPOSER_DRAFT_STORAGE_KEY = "t3code:composer-drafts:v1";
+export const LAST_SELECTED_PROVIDER_MODEL_KEY = "t3code:last-selected-provider-model:v1";
 export type DraftThreadEnvMode = "local" | "worktree";
 
 const COMPOSER_PERSIST_DEBOUNCE_MS = 300;
+
+interface LastSelectedProviderModel {
+  provider: ProviderKind;
+  model: string;
+}
+
+export function getLastSelectedProviderModel(): LastSelectedProviderModel | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(LAST_SELECTED_PROVIDER_MODEL_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as LastSelectedProviderModel;
+  } catch {
+    return null;
+  }
+}
+
+export function setLastSelectedProviderModel(provider: ProviderKind, model: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(
+      LAST_SELECTED_PROVIDER_MODEL_KEY,
+      JSON.stringify({ provider, model }),
+    );
+  } catch {
+    // Ignore storage errors
+  }
+}
 
 interface DebouncedStorage extends StateStorage {
   flush: () => void;
@@ -192,38 +221,27 @@ const EMPTY_PERSISTED_ATTACHMENTS: PersistedComposerImageAttachment[] = [];
 Object.freeze(EMPTY_IMAGES);
 Object.freeze(EMPTY_IDS);
 Object.freeze(EMPTY_PERSISTED_ATTACHMENTS);
-const EMPTY_THREAD_DRAFT = Object.freeze({
-  prompt: "",
-  images: EMPTY_IMAGES,
-  nonPersistedImageIds: EMPTY_IDS,
-  persistedAttachments: EMPTY_PERSISTED_ATTACHMENTS,
-  provider: null,
-  model: null,
-  runtimeMode: null,
-  interactionMode: null,
-  effort: null,
-  codexFastMode: false,
-}) as ComposerThreadDraftState;
-
-const REASONING_EFFORT_VALUES = new Set<ReasoningEffort>([
-  ...REASONING_EFFORT_OPTIONS_BY_PROVIDER.codex,
-  ...REASONING_EFFORT_OPTIONS_BY_PROVIDER.opencode,
-]);
-
 function createEmptyThreadDraft(): ComposerThreadDraftState {
+  const lastSelected = getLastSelectedProviderModel();
   return {
     prompt: "",
     images: [],
     nonPersistedImageIds: [],
     persistedAttachments: [],
-    provider: null,
-    model: null,
+    provider: lastSelected?.provider ?? null,
+    model: lastSelected?.model ?? null,
     runtimeMode: null,
     interactionMode: null,
     effort: null,
     codexFastMode: false,
   };
 }
+const EMPTY_THREAD_DRAFT = Object.freeze(createEmptyThreadDraft());
+
+const REASONING_EFFORT_VALUES = new Set<ReasoningEffort>([
+  ...REASONING_EFFORT_OPTIONS_BY_PROVIDER.codex,
+  ...REASONING_EFFORT_OPTIONS_BY_PROVIDER.opencode,
+]);
 
 function composerImageDedupKey(image: ComposerImageAttachment): string {
   // Keep this independent from File.lastModified so dedupe is stable for hydrated

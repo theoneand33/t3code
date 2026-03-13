@@ -187,6 +187,8 @@ const makeCodexTextGeneration = Effect.gen(function* () {
     outputSchemaJson,
     imagePaths = [],
     cleanupPaths = [],
+    provider,
+    model,
   }: {
     operation: "generateCommitMessage" | "generatePrContent" | "generateBranchName";
     cwd: string;
@@ -194,6 +196,8 @@ const makeCodexTextGeneration = Effect.gen(function* () {
     outputSchemaJson: S;
     imagePaths?: ReadonlyArray<string>;
     cleanupPaths?: ReadonlyArray<string>;
+    provider?: string | undefined;
+    model?: string | undefined;
   }): Effect.Effect<S["Type"], TextGenerationError, S["DecodingServices"]> =>
     Effect.gen(function* () {
       const schemaPath = yield* writeTempFile(
@@ -204,15 +208,17 @@ const makeCodexTextGeneration = Effect.gen(function* () {
       const outputPath = yield* writeTempFile(operation, "codex-output", "");
 
       const runCodexCommand = Effect.gen(function* () {
+        const cli = provider === "opencode" ? "opencode" : "codex";
+        const selectedModel = model ?? CODEX_MODEL;
         const command = ChildProcess.make(
-          "codex",
+          cli,
           [
             "exec",
             "--ephemeral",
             "-s",
             "read-only",
             "--model",
-            CODEX_MODEL,
+            selectedModel,
             "--config",
             `model_reasoning_effort="${CODEX_REASONING_EFFORT}"`,
             "--output-schema",
@@ -353,6 +359,8 @@ const makeCodexTextGeneration = Effect.gen(function* () {
       cwd: input.cwd,
       prompt,
       outputSchemaJson,
+      provider: input.provider,
+      model: input.model,
     }).pipe(
       Effect.map(
         (generated) =>

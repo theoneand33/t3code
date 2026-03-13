@@ -28,21 +28,16 @@ import {
 import { ProviderHealth, type ProviderHealthShape } from "../Services/ProviderHealth";
 
 const DEFAULT_TIMEOUT_MS = 4_000;
-const DEFAULT_OPENCODE_SERVER_URL = 'http://127.0.0.1:6733';
-const CODEX_PROVIDER = 'codex' as const;
-const OPENCODE_PROVIDER = 'opencode' as const;
+const DEFAULT_OPENCODE_SERVER_URL = "http://127.0.0.1:6733";
+const CODEX_PROVIDER = "codex" as const;
+const OPENCODE_PROVIDER = "opencode" as const;
 
-class OpenCodeModelDiscoveryError extends Data.TaggedError(
-  'OpenCodeModelDiscoveryError',
-)<{
+class OpenCodeModelDiscoveryError extends Data.TaggedError("OpenCodeModelDiscoveryError")<{
   readonly message: string;
   readonly cause?: unknown;
 }> {}
 
-const discoverOpenCodeModels = (input: {
-  directory: string;
-  serverUrl?: string;
-}) =>
+const discoverOpenCodeModels = (input: { directory: string; serverUrl?: string }) =>
   Effect.tryPromise({
     try: () =>
       fetchOpenCodeModels({
@@ -51,10 +46,7 @@ const discoverOpenCodeModels = (input: {
       }),
     catch: (cause) =>
       new OpenCodeModelDiscoveryError({
-        message:
-          cause instanceof Error
-            ? cause.message
-            : 'OpenCode model discovery failed.',
+        message: cause instanceof Error ? cause.message : "OpenCode model discovery failed.",
         cause,
       }),
   });
@@ -77,32 +69,29 @@ function isCommandMissingCause(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
   const lower = error.message.toLowerCase();
   return (
-    lower.includes('command not found: codex') ||
-    lower.includes('spawn codex enoent') ||
-    lower.includes('enoent') ||
-    lower.includes('notfound')
+    lower.includes("command not found: codex") ||
+    lower.includes("spawn codex enoent") ||
+    lower.includes("enoent") ||
+    lower.includes("notfound")
   );
 }
 
-function isSpecificCommandMissingCause(
-  command: string,
-  error: unknown,
-): boolean {
+function isSpecificCommandMissingCause(command: string, error: unknown): boolean {
   if (!(error instanceof Error)) return false;
   const target = command.toLowerCase();
   const lower = error.message.toLowerCase();
   return (
     lower.includes(`command not found: ${target}`) ||
     lower.includes(`spawn ${target} enoent`) ||
-    (lower.includes('enoent') && lower.includes(target)) ||
-    (lower.includes('notfound') && lower.includes(target))
+    (lower.includes("enoent") && lower.includes(target)) ||
+    (lower.includes("notfound") && lower.includes(target))
   );
 }
 
 function detailFromResult(
   result: CommandResult & { readonly timedOut?: boolean },
 ): string | undefined {
-  if (result.timedOut) return 'Timed out while running command.';
+  if (result.timedOut) return "Timed out while running command.";
   const stderr = nonEmptyTrimmed(result.stderr);
   if (stderr) return stderr;
   const stdout = nonEmptyTrimmed(result.stdout);
@@ -122,18 +111,13 @@ function extractAuthBoolean(value: unknown): boolean | undefined {
     return undefined;
   }
 
-  if (!value || typeof value !== 'object') return undefined;
+  if (!value || typeof value !== "object") return undefined;
 
   const record = value as Record<string, unknown>;
-  for (const key of [
-    'authenticated',
-    'isAuthenticated',
-    'loggedIn',
-    'isLoggedIn',
-  ] as const) {
-    if (typeof record[key] === 'boolean') return record[key];
+  for (const key of ["authenticated", "isAuthenticated", "loggedIn", "isLoggedIn"] as const) {
+    if (typeof record[key] === "boolean") return record[key];
   }
-  for (const key of ['auth', 'status', 'session', 'account'] as const) {
+  for (const key of ["auth", "status", "session", "account"] as const) {
     const nested = extractAuthBoolean(record[key]);
     if (nested !== undefined) return nested;
   }
@@ -148,36 +132,34 @@ export function parseAuthStatusFromOutput(result: CommandResult): {
   const lowerOutput = `${result.stdout}\n${result.stderr}`.toLowerCase();
 
   if (
-    lowerOutput.includes('unknown command') ||
-    lowerOutput.includes('unrecognized command') ||
-    lowerOutput.includes('unexpected argument')
+    lowerOutput.includes("unknown command") ||
+    lowerOutput.includes("unrecognized command") ||
+    lowerOutput.includes("unexpected argument")
   ) {
     return {
-      status: 'warning',
-      authStatus: 'unknown',
-      message:
-        'Codex CLI authentication status command is unavailable in this Codex version.',
+      status: "warning",
+      authStatus: "unknown",
+      message: "Codex CLI authentication status command is unavailable in this Codex version.",
     };
   }
 
   if (
-    lowerOutput.includes('not logged in') ||
-    lowerOutput.includes('login required') ||
-    lowerOutput.includes('authentication required') ||
-    lowerOutput.includes('run `codex login`') ||
-    lowerOutput.includes('run codex login')
+    lowerOutput.includes("not logged in") ||
+    lowerOutput.includes("login required") ||
+    lowerOutput.includes("authentication required") ||
+    lowerOutput.includes("run `codex login`") ||
+    lowerOutput.includes("run codex login")
   ) {
     return {
-      status: 'error',
-      authStatus: 'unauthenticated',
-      message:
-        'Codex CLI is not authenticated. Run `codex login` and try again.',
+      status: "error",
+      authStatus: "unauthenticated",
+      message: "Codex CLI is not authenticated. Run `codex login` and try again.",
     };
   }
 
   const parsedAuth = (() => {
     const trimmed = result.stdout.trim();
-    if (!trimmed || (!trimmed.startsWith('{') && !trimmed.startsWith('['))) {
+    if (!trimmed || (!trimmed.startsWith("{") && !trimmed.startsWith("["))) {
       return {
         attemptedJsonParse: false as const,
         auth: undefined as boolean | undefined,
@@ -197,35 +179,34 @@ export function parseAuthStatusFromOutput(result: CommandResult): {
   })();
 
   if (parsedAuth.auth === true) {
-    return { status: 'ready', authStatus: 'authenticated' };
+    return { status: "ready", authStatus: "authenticated" };
   }
   if (parsedAuth.auth === false) {
     return {
-      status: 'error',
-      authStatus: 'unauthenticated',
-      message:
-        'Codex CLI is not authenticated. Run `codex login` and try again.',
+      status: "error",
+      authStatus: "unauthenticated",
+      message: "Codex CLI is not authenticated. Run `codex login` and try again.",
     };
   }
   if (parsedAuth.attemptedJsonParse) {
     return {
-      status: 'warning',
-      authStatus: 'unknown',
+      status: "warning",
+      authStatus: "unknown",
       message:
-        'Could not verify Codex authentication status from JSON output (missing auth marker).',
+        "Could not verify Codex authentication status from JSON output (missing auth marker).",
     };
   }
   if (result.code === 0) {
-    return { status: 'ready', authStatus: 'authenticated' };
+    return { status: "ready", authStatus: "authenticated" };
   }
 
   const detail = detailFromResult(result);
   return {
-    status: 'warning',
-    authStatus: 'unknown',
+    status: "warning",
+    authStatus: "unknown",
     message: detail
       ? `Could not verify Codex authentication status. ${detail}`
-      : 'Could not verify Codex authentication status.',
+      : "Could not verify Codex authentication status.",
   };
 }
 
@@ -297,12 +278,10 @@ export const hasCustomModelProvider = Effect.map(
 
 // ── Effect-native command execution ─────────────────────────────────
 
-const collectStreamAsString = <E>(
-  stream: Stream.Stream<Uint8Array, E>,
-): Effect.Effect<string, E> =>
+const collectStreamAsString = <E>(stream: Stream.Stream<Uint8Array, E>): Effect.Effect<string, E> =>
   Stream.runFold(
     stream,
-    () => '',
+    () => "",
     (acc, chunk) => acc + new TextDecoder().decode(chunk),
   );
 
@@ -310,7 +289,7 @@ const runCommand = (commandName: string, args: ReadonlyArray<string>) =>
   Effect.gen(function* () {
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
     const command = ChildProcess.make(commandName, [...args], {
-      shell: process.platform === 'win32',
+      shell: process.platform === "win32",
     });
 
     const child = yield* spawner.spawn(command);
@@ -321,16 +300,14 @@ const runCommand = (commandName: string, args: ReadonlyArray<string>) =>
         collectStreamAsString(child.stderr),
         child.exitCode.pipe(Effect.map(Number)),
       ],
-      { concurrency: 'unbounded' },
+      { concurrency: "unbounded" },
     );
 
     return { stdout, stderr, code: exitCode } satisfies CommandResult;
   }).pipe(Effect.scoped);
 
-const runCodexCommand = (args: ReadonlyArray<string>) =>
-  runCommand('codex', args);
-const runOpenCodeCommand = (args: ReadonlyArray<string>) =>
-  runCommand('opencode', args);
+const runCodexCommand = (args: ReadonlyArray<string>) => runCommand("codex", args);
+const runOpenCodeCommand = (args: ReadonlyArray<string>) => runCommand("opencode", args);
 
 // ── Health check ────────────────────────────────────────────────────
 
@@ -342,7 +319,7 @@ export const checkCodexProviderStatus: Effect.Effect<
   const checkedAt = new Date().toISOString();
 
   // Probe 1: `codex --version` — is the CLI reachable?
-  const versionProbe = yield* runCodexCommand(['--version']).pipe(
+  const versionProbe = yield* runCodexCommand(["--version"]).pipe(
     Effect.timeoutOption(DEFAULT_TIMEOUT_MS),
     Effect.result,
   );
@@ -351,12 +328,12 @@ export const checkCodexProviderStatus: Effect.Effect<
     const error = versionProbe.failure;
     return {
       provider: CODEX_PROVIDER,
-      status: 'error' as const,
+      status: "error" as const,
       available: false,
-      authStatus: 'unknown' as const,
+      authStatus: "unknown" as const,
       checkedAt,
       message: isCommandMissingCause(error)
-        ? 'Codex CLI (`codex`) is not installed or not on PATH.'
+        ? "Codex CLI (`codex`) is not installed or not on PATH."
         : `Failed to execute Codex CLI health check: ${error instanceof Error ? error.message : String(error)}.`,
     };
   }
@@ -364,12 +341,11 @@ export const checkCodexProviderStatus: Effect.Effect<
   if (Option.isNone(versionProbe.success)) {
     return {
       provider: CODEX_PROVIDER,
-      status: 'error' as const,
+      status: "error" as const,
       available: false,
-      authStatus: 'unknown' as const,
+      authStatus: "unknown" as const,
       checkedAt,
-      message:
-        'Codex CLI is installed but failed to run. Timed out while running command.',
+      message: "Codex CLI is installed but failed to run. Timed out while running command.",
     };
   }
 
@@ -378,13 +354,13 @@ export const checkCodexProviderStatus: Effect.Effect<
     const detail = detailFromResult(version);
     return {
       provider: CODEX_PROVIDER,
-      status: 'error' as const,
+      status: "error" as const,
       available: false,
-      authStatus: 'unknown' as const,
+      authStatus: "unknown" as const,
       checkedAt,
       message: detail
         ? `Codex CLI is installed but failed to run. ${detail}`
-        : 'Codex CLI is installed but failed to run.',
+        : "Codex CLI is installed but failed to run.",
     };
   }
 
@@ -426,26 +402,25 @@ export const checkCodexProviderStatus: Effect.Effect<
     const error = authProbe.failure;
     return {
       provider: CODEX_PROVIDER,
-      status: 'warning' as const,
+      status: "warning" as const,
       available: true,
-      authStatus: 'unknown' as const,
+      authStatus: "unknown" as const,
       checkedAt,
       message:
         error instanceof Error
           ? `Could not verify Codex authentication status: ${error.message}.`
-          : 'Could not verify Codex authentication status.',
+          : "Could not verify Codex authentication status.",
     };
   }
 
   if (Option.isNone(authProbe.success)) {
     return {
       provider: CODEX_PROVIDER,
-      status: 'warning' as const,
+      status: "warning" as const,
       available: true,
-      authStatus: 'unknown' as const,
+      authStatus: "unknown" as const,
       checkedAt,
-      message:
-        'Could not verify Codex authentication status. Timed out while running command.',
+      message: "Could not verify Codex authentication status. Timed out while running command.",
     };
   }
 
@@ -466,7 +441,7 @@ export const checkOpenCodeProviderStatus: Effect.Effect<
   ChildProcessSpawner.ChildProcessSpawner
 > = Effect.gen(function* () {
   const checkedAt = new Date().toISOString();
-  const versionProbe = yield* runOpenCodeCommand(['--version']).pipe(
+  const versionProbe = yield* runOpenCodeCommand(["--version"]).pipe(
     Effect.timeoutOption(DEFAULT_TIMEOUT_MS),
     Effect.result,
   );
@@ -475,12 +450,12 @@ export const checkOpenCodeProviderStatus: Effect.Effect<
     const error = versionProbe.failure;
     return {
       provider: OPENCODE_PROVIDER,
-      status: 'error' as const,
+      status: "error" as const,
       available: false,
-      authStatus: 'unknown' as const,
+      authStatus: "unknown" as const,
       checkedAt,
-      message: isSpecificCommandMissingCause('opencode', error)
-        ? 'OpenCode CLI (`opencode`) is not installed or not on PATH.'
+      message: isSpecificCommandMissingCause("opencode", error)
+        ? "OpenCode CLI (`opencode`) is not installed or not on PATH."
         : `Failed to execute OpenCode CLI health check: ${error instanceof Error ? error.message : String(error)}.`,
     };
   }
@@ -488,12 +463,11 @@ export const checkOpenCodeProviderStatus: Effect.Effect<
   if (Option.isNone(versionProbe.success)) {
     return {
       provider: OPENCODE_PROVIDER,
-      status: 'error' as const,
+      status: "error" as const,
       available: false,
-      authStatus: 'unknown' as const,
+      authStatus: "unknown" as const,
       checkedAt,
-      message:
-        'OpenCode CLI is installed but failed to run. Timed out while running command.',
+      message: "OpenCode CLI is installed but failed to run. Timed out while running command.",
     };
   }
 
@@ -502,23 +476,23 @@ export const checkOpenCodeProviderStatus: Effect.Effect<
     const detail = detailFromResult(version);
     return {
       provider: OPENCODE_PROVIDER,
-      status: 'error' as const,
+      status: "error" as const,
       available: false,
-      authStatus: 'unknown' as const,
+      authStatus: "unknown" as const,
       checkedAt,
       message: detail
         ? `OpenCode CLI is installed but failed to run. ${detail}`
-        : 'OpenCode CLI is installed but failed to run.',
+        : "OpenCode CLI is installed but failed to run.",
     };
   }
 
   return {
     provider: OPENCODE_PROVIDER,
-    status: 'ready' as const,
+    status: "ready" as const,
     available: true,
-    authStatus: 'unknown' as const,
+    authStatus: "unknown" as const,
     checkedAt,
-    message: 'OpenCode CLI is available.',
+    message: "OpenCode CLI is available.",
   } satisfies ServerProviderStatus;
 });
 
@@ -532,7 +506,7 @@ export const ProviderHealthLive = Layer.effect(
     const opencodeBaseStatus = yield* checkOpenCodeProviderStatus;
     let opencodeStatus = opencodeBaseStatus;
 
-    if (opencodeBaseStatus.available && opencodeBaseStatus.status !== 'error') {
+    if (opencodeBaseStatus.available && opencodeBaseStatus.status !== "error") {
       opencodeStatus = yield* discoverOpenCodeModels({
         directory: serverConfig.cwd,
       }).pipe(
@@ -541,22 +515,22 @@ export const ProviderHealthLive = Layer.effect(
           ...(models.length > 0 ? { models } : {}),
           ...(models.length === 0
             ? {
-                status: 'warning' as const,
-                message: 'OpenCode is available but did not return any models.',
+                status: "warning" as const,
+                message: "OpenCode is available but did not return any models.",
               }
             : {}),
         })),
         Effect.catch((cause) =>
           Effect.succeed({
             ...opencodeBaseStatus,
-            status: 'warning' as const,
+            status: "warning" as const,
             message: `OpenCode is available but model discovery failed: ${cause.message}`,
           }),
         ),
       );
     }
 
-    if (!opencodeStatus.available || opencodeStatus.status === 'error') {
+    if (!opencodeStatus.available || opencodeStatus.status === "error") {
       const discovered = yield* discoverOpenCodeModels({
         directory: serverConfig.cwd,
         serverUrl: DEFAULT_OPENCODE_SERVER_URL,
@@ -565,14 +539,14 @@ export const ProviderHealthLive = Layer.effect(
         const models = discovered.success;
         opencodeStatus = {
           provider: OPENCODE_PROVIDER,
-          status: models.length > 0 ? 'ready' : 'warning',
+          status: models.length > 0 ? "ready" : "warning",
           available: true,
-          authStatus: 'unknown',
+          authStatus: "unknown",
           checkedAt: new Date().toISOString(),
           message:
             models.length > 0
-              ? 'Connected to a running OpenCode server at http://127.0.0.1:6733.'
-              : 'Connected to a running OpenCode server, but it returned no models.',
+              ? "Connected to a running OpenCode server at http://127.0.0.1:6733."
+              : "Connected to a running OpenCode server, but it returned no models.",
           ...(models.length > 0 ? { models } : {}),
         };
       }

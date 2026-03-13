@@ -422,40 +422,40 @@ export function deriveWorkLogEntries(
   const toolEntryIndexByIdentity = new Map<string, number>();
 
   for (const activity of filtered) {
-      const payload =
-        activity.payload && typeof activity.payload === "object"
-          ? (activity.payload as Record<string, unknown>)
-          : null;
-      const command = extractToolCommand(payload);
-      const changedFiles = extractChangedFiles(payload);
-      const entry: WorkLogEntry = {
-        id: activity.id,
-        createdAt: activity.createdAt,
-        label: activity.summary,
-        tone: activity.tone === "approval" ? "info" : activity.tone,
-      };
-      if (payload && typeof payload.detail === "string" && payload.detail.length > 0) {
-        entry.detail = payload.detail;
-      }
-      if (command) {
-        entry.command = command;
-      }
-      if (changedFiles.length > 0) {
-        entry.changedFiles = changedFiles;
-      }
-
-      const toolIdentity = activity.tone === "tool" ? extractToolIdentity(payload) : null;
-      if (toolIdentity) {
-        const existingIndex = toolEntryIndexByIdentity.get(toolIdentity);
-        if (existingIndex !== undefined) {
-          entries[existingIndex] = entry;
-          continue;
-        }
-        toolEntryIndexByIdentity.set(toolIdentity, entries.length);
-      }
-
-      entries.push(entry);
+    const payload =
+      activity.payload && typeof activity.payload === "object"
+        ? (activity.payload as Record<string, unknown>)
+        : null;
+    const command = extractToolCommand(payload);
+    const changedFiles = extractChangedFiles(payload);
+    const entry: WorkLogEntry = {
+      id: activity.id,
+      createdAt: activity.createdAt,
+      label: activity.summary,
+      tone: activity.tone === "approval" ? "info" : activity.tone,
+    };
+    if (payload && typeof payload.detail === "string" && payload.detail.length > 0) {
+      entry.detail = payload.detail;
     }
+    if (command) {
+      entry.command = command;
+    }
+    if (changedFiles.length > 0) {
+      entry.changedFiles = changedFiles;
+    }
+
+    const toolIdentity = activity.tone === "tool" ? extractToolIdentity(payload) : null;
+    if (toolIdentity) {
+      const existingIndex = toolEntryIndexByIdentity.get(toolIdentity);
+      if (existingIndex !== undefined) {
+        entries[existingIndex] = entry;
+        continue;
+      }
+      toolEntryIndexByIdentity.set(toolIdentity, entries.length);
+    }
+
+    entries.push(entry);
+  }
 
   return entries;
 }
