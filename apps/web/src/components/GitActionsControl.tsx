@@ -1,4 +1,4 @@
-import type { GitStackedAction, GitStatusResult, ThreadId } from "@t3tools/contracts";
+import type { GitStackedAction, GitStatusResult, ProviderKind, ThreadId } from "@t3tools/contracts";
 import { useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ChevronDownIcon, CloudUploadIcon, GitCommitIcon, InfoIcon } from "lucide-react";
@@ -46,6 +46,8 @@ import { readNativeApi } from "~/nativeApi";
 interface GitActionsControlProps {
   gitCwd: string | null;
   activeThreadId: ThreadId | null;
+  selectedProvider: ProviderKind;
+  selectedModel: string;
 }
 
 interface PendingDefaultBranchAction {
@@ -150,7 +152,12 @@ function GitQuickActionIcon({ quickAction }: { quickAction: GitQuickAction }) {
   return <InfoIcon className={iconClassName} />;
 }
 
-export default function GitActionsControl({ gitCwd, activeThreadId }: GitActionsControlProps) {
+export default function GitActionsControl({
+  gitCwd,
+  activeThreadId,
+  selectedProvider,
+  selectedModel,
+}: GitActionsControlProps) {
   const threadToastData = useMemo(
     () => (activeThreadId ? { threadId: activeThreadId } : undefined),
     [activeThreadId],
@@ -337,6 +344,8 @@ export default function GitActionsControl({ gitCwd, activeThreadId }: GitActions
         action,
         ...(commitMessage ? { commitMessage } : {}),
         ...(featureBranch ? { featureBranch } : {}),
+        provider: selectedProvider,
+        model: selectedModel,
       });
 
       try {
@@ -433,6 +442,8 @@ export default function GitActionsControl({ gitCwd, activeThreadId }: GitActions
       setPendingDefaultBranchAction,
       threadToastData,
       gitStatusForActions,
+      selectedProvider,
+      selectedModel,
     ],
   );
 

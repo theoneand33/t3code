@@ -3572,6 +3572,8 @@ export default function ChatView({ threadId }: ChatViewProps) {
           diffToggleShortcutLabel={diffPanelShortcutLabel}
           gitCwd={gitCwd}
           diffOpen={diffOpen}
+          selectedProvider={selectedProvider}
+          selectedModel={selectedModel}
           onRunProjectScript={(script) => {
             void runProjectScript(script);
           }}
@@ -4273,6 +4275,8 @@ interface ChatHeaderProps {
   diffToggleShortcutLabel: string | null;
   gitCwd: string | null;
   diffOpen: boolean;
+  selectedProvider: ProviderKind;
+  selectedModel: string;
   onRunProjectScript: (script: ProjectScript) => void;
   onAddProjectScript: (input: NewProjectScriptInput) => Promise<void>;
   onUpdateProjectScript: (scriptId: string, input: NewProjectScriptInput) => Promise<void>;
@@ -4293,6 +4297,8 @@ const ChatHeader = memo(function ChatHeader({
   diffToggleShortcutLabel,
   gitCwd,
   diffOpen,
+  selectedProvider,
+  selectedModel,
   onRunProjectScript,
   onAddProjectScript,
   onUpdateProjectScript,
@@ -4339,7 +4345,14 @@ const ChatHeader = memo(function ChatHeader({
             openInCwd={openInCwd}
           />
         )}
-        {activeProjectName && <GitActionsControl gitCwd={gitCwd} activeThreadId={activeThreadId} />}
+        {activeProjectName && (
+          <GitActionsControl
+            gitCwd={gitCwd}
+            activeThreadId={activeThreadId}
+            selectedProvider={selectedProvider}
+            selectedModel={selectedModel}
+          />
+        )}
         <Tooltip>
           <TooltipTrigger
             render={
