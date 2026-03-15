@@ -1,9 +1,11 @@
 import {
   ApprovalRequestId,
+  isToolLifecycleItemType,
   type OrchestrationLatestTurn,
   type OrchestrationThreadActivity,
   type OrchestrationProposedPlanId,
   type ProviderKind,
+  type ToolLifecycleItemType,
   type UserInputQuestion,
   type TurnId,
 } from "@t3tools/contracts";
@@ -37,6 +39,9 @@ export interface WorkLogEntry {
   command?: string;
   changedFiles?: ReadonlyArray<string>;
   tone: "thinking" | "tool" | "info" | "error";
+  toolTitle?: string;
+  itemType?: ToolLifecycleItemType;
+  requestKind?: PendingApproval["requestKind"];
 }
 
 export interface PendingApproval {
@@ -408,48 +413,46 @@ export function deriveWorkLogEntries(
     .filter((activity) => (latestTurnId ? activity.turnId === latestTurnId : true))
     .filter((activity) => activity.kind !== "tool.started")
     .filter((activity) => activity.kind !== "task.started" && activity.kind !== "task.completed")
-    .filter((activity) => activity.summary !== "Checkpoint captured");
-
-  const entries: WorkLogEntry[] = [];
-  const toolEntryIndexByIdentity = new Map<string, number>();
-
-  for (const activity of filtered) {
-    const payload =
-      activity.payload && typeof activity.payload === "object"
-        ? (activity.payload as Record<string, unknown>)
-        : null;
-    const command = extractToolCommand(payload);
-    const changedFiles = extractChangedFiles(payload);
-    const entry: WorkLogEntry = {
-      id: activity.id,
-      createdAt: activity.createdAt,
-      label: activity.summary,
-      tone: activity.tone === "approval" ? "info" : activity.tone,
-    };
-    if (payload && typeof payload.detail === "string" && payload.detail.length > 0) {
-      entry.detail = payload.detail;
-    }
-    if (command) {
-      entry.command = command;
-    }
-    if (changedFiles.length > 0) {
-      entry.changedFiles = changedFiles;
-    }
-
-    const toolIdentity = activity.tone === "tool" ? extractToolIdentity(payload) : null;
-    if (toolIdentity) {
-      const existingIndex = toolEntryIndexByIdentity.get(toolIdentity);
-      if (existingIndex !== undefined) {
-        entries[existingIndex] = entry;
-        continue;
+    .filter((activity) => activity.summary !== "Checkpoint captured")
+    .map((activity) => {
+      const payload =
+        activity.payload && typeof activity.payload === "object"
+          ? (activity.payload as Record<string, unknown>)
+          : null;
+      const command = extractToolCommand(payload);
+      const changedFiles = extractChangedFiles(payload);
+      const title = extractToolTitle(payload);
+      const entry: WorkLogEntry = {
+        id: activity.id,
+        createdAt: activity.createdAt,
+        label: activity.summary,
+        tone: activity.tone === "approval" ? "info" : activity.tone,
+      };
+      const itemType = extractWorkLogItemType(payload);
+      const requestKind = extractWorkLogRequestKind(payload);
+      if (payload && typeof payload.detail === "string" && payload.detail.length > 0) {
+        const detail = stripTrailingExitCode(payload.detail).output;
+        if (detail) {
+          entry.detail = detail;
+        }
       }
-      toolEntryIndexByIdentity.set(toolIdentity, entries.length);
-    }
-
-    entries.push(entry);
-  }
-
-  return entries;
+      if (command) {
+        entry.command = command;
+      }
+      if (changedFiles.length > 0) {
+        entry.changedFiles = changedFiles;
+      }
+      if (title) {
+        entry.toolTitle = title;
+      }
+      if (itemType) {
+        entry.itemType = itemType;
+      }
+      if (requestKind) {
+        entry.requestKind = requestKind;
+      }
+      return entry;
+    });
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -492,16 +495,29 @@ function extractToolCommand(payload: Record<string, unknown> | null): string | n
   return candidates.find((candidate) => candidate !== null) ?? null;
 }
 
-function extractToolIdentity(payload: Record<string, unknown> | null): string | null {
-  const data = asRecord(payload?.data);
-  const item = asRecord(data?.item);
-  const candidates = [
-    asTrimmedString(payload?.itemId),
-    asTrimmedString(item?.id),
-    asTrimmedString(item?.callID),
-    asTrimmedString(data?.itemId),
-  ];
-  return candidates.find((candidate) => candidate !== null) ?? null;
+function extractToolTitle(payload: Record<string, unknown> | null): string | null {
+  return asTrimmedString(payload?.title);
+}
+
+function stripTrailingExitCode(value: string): {
+  output: string | null;
+  exitCode?: number | undefined;
+} {
+  const trimmed = value.trim();
+  const match = /^(?<output>[\s\S]*?)(?:\s*<exited with exit code (?<code>\d+)>)\s*$/i.exec(
+    trimmed,
+  );
+  if (!match?.groups) {
+    return {
+      output: trimmed.length > 0 ? trimmed : null,
+    };
+  }
+  const exitCode = Number.parseInt(match.groups.code ?? "", 10);
+  const normalizedOutput = match.groups.output?.trim() ?? "";
+  return {
+    output: normalizedOutput.length > 0 ? normalizedOutput : null,
+    ...(Number.isInteger(exitCode) ? { exitCode } : {}),
+  };
 }
 
 function pushChangedFile(target: string[], seen: Set<string>, value: unknown) {
@@ -562,10 +578,32 @@ function collectChangedFiles(value: unknown, target: string[], seen: Set<string>
 }
 
 function extractChangedFiles(payload: Record<string, unknown> | null): string[] {
-  const data = asRecord(payload?.data);
   const changedFiles: string[] = [];
-  collectChangedFiles(data, changedFiles, new Set<string>(), 0);
+  const seen = new Set<string>();
+  collectChangedFiles(asRecord(payload?.data), changedFiles, seen, 0);
   return changedFiles;
+}
+
+function extractWorkLogItemType(
+  payload: Record<string, unknown> | null,
+): WorkLogEntry["itemType"] | undefined {
+  if (typeof payload?.itemType === "string" && isToolLifecycleItemType(payload.itemType)) {
+    return payload.itemType;
+  }
+  return undefined;
+}
+
+function extractWorkLogRequestKind(
+  payload: Record<string, unknown> | null,
+): WorkLogEntry["requestKind"] | undefined {
+  if (
+    payload?.requestKind === "command" ||
+    payload?.requestKind === "file-read" ||
+    payload?.requestKind === "file-change"
+  ) {
+    return payload.requestKind;
+  }
+  return requestKindFromRequestType(payload?.requestType) ?? undefined;
 }
 
 function compareActivitiesByOrder(
