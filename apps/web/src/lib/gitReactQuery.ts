@@ -121,12 +121,14 @@ export function gitRunStackedActionMutationOptions(input: {
       featureBranch,
       provider,
       model,
+      filePaths,
     }: {
       action: GitStackedAction;
       commitMessage?: string;
       featureBranch?: boolean;
       provider?: ProviderKind;
       model?: string;
+      filePaths?: string[];
     }) => {
       const api = ensureNativeApi();
       if (!input.cwd) throw new Error("Git action is unavailable.");
@@ -137,6 +139,7 @@ export function gitRunStackedActionMutationOptions(input: {
         ...(featureBranch ? { featureBranch } : {}),
         ...(provider ? { provider } : {}),
         ...(model ? { model } : {}),
+        ...(filePaths ? { filePaths } : {}),
       });
     },
     onSettled: async () => {
